@@ -3,6 +3,12 @@
 import os
 import sys
 
+import batchspawner.api
+
+
+BASEDIR = os.path.dirname(__file__)
+
+
 #
 # Connections, ports, config files.
 #
@@ -11,6 +17,9 @@ c.JupyterHub.hub_port = 8081
 c.JupyterHub.cookie_secret_file = '/etc/jupyterhub/jupyterhub_cookie_secret'
 c.JupyterHub.db_url = 'sqlite:////etc/jupyterhub/jupyterhub.sqlite'
 c.JupyterHub.base_url = '/'
+c.ConfigurableHTTPProxy.auth_token = open('/etc/jupyterhub/configurable-http-proxy-token.var').readline().strip()
+c.ConfigurableHTTPProxy.api_url = 'http://10.1.1.1:8001'
+c.ConfigurableHTTPProxy.should_start = True
 
 
 # Prevents servers from being killed
@@ -21,6 +30,7 @@ if 'JUPYTER_PERSIST_ACROSS_RESTARTS' in os.environ:
 #
 # Authentication config
 #
+c.PAMAuthenticator.open_sessions = False
 import grp
 c.Authenticator.admin_users = set(grp.getgrnam('admin').gr_mem) & set(grp.getgrnam('zarco-users').gr_mem)
 c.LocalAuthenticator.group_whitelist = {'zarco-users'}
@@ -31,18 +41,20 @@ c.JupyterHub.cookie_max_age_days = 3
 #
 # Spawner config
 #
-c.JupyterHub.spawner_class = 'batchspawner.CondorSpawner'
-c.Spawner.http_timeout = 120
+c.JupyterHub.spawner_class = 'wrapspawner.ProfilesSpawner'
+#------------------------------------------------------------------------------
+# BatchSpawnerBase configuration
+#   Providing default values that we may omit in the profiles
+#------------------------------------------------------------------------------
 c.BatchSpawnerBase.req_nprocs = '1'
-c.BatchSpawnerBase.req_runtime = '12:00:00'
-c.BatchSpawnerBase.req_memory = '2gb'
+c.BatchSpawnerBase.req_runtime = '10:00:00'
+c.BatchSpawnerBase.req_memory = '2048'
 c.CondorSpawner.exec_prefix = 'sudo -i -E -u {username}'
 c.CondorSpawner.batch_script = '''
 Universe  =  vanilla
 Executable = /bin/sh
 RequestMemory = {memory}
 RequestCpus = {nprocs}
-request_GPUs = 1
 Arguments = \"-c 'export PATH=/share/apps/anaconda3.6/bin:$PATH; exec {cmd}'\"
 Remote_Initialdir = {homedir}
 Output = {homedir}/.jupyterhub.condor.out
@@ -52,6 +64,58 @@ GetEnv = True
 {options}
 Queue
 '''
+#------------------------------------------------------------------------------
+# ProfilesSpawner configuration
+#------------------------------------------------------------------------------
+# List of profiles to offer for selection. Signature is:
+#   List(Tuple( Unicode, Unicode, Type(Spawner), Dict ))
+# corresponding to profile display name, unique key, Spawner class,
+# dictionary of spawner config options.
+#
+# The first three values will be exposed in the input_template as {display},
+# {key}, and {type}
+#
+c.ProfilesSpawner.profiles = [
+    #('Head node', 'head', 'sudospawner.SudoSpawner', {}),
+    ('Compute 2G (10h)', 'condor1', 'batchspawner.CondorSpawner',
+        dict(req_nprocs='1', req_memory='2048', req_runtime='10:00:00')),
+    ('Compute 5G (10h)', 'condor2', 'batchspawner.CondorSpawner',
+        dict(req_nprocs='1', req_memory='5120', req_runtime='10:00:00')),
+    ('Compute 20G (10h, timeout after 60 min idle)', 'condor3', 'batchspawner.CondorSpawner',
+        dict(req_nprocs='1', req_memory='20480', req_runtime='10:00:00', req_culltime=60*60+300)),
+    ('Compute 40G (4h, timeout after 15 min idle)', 'condor4', 'batchspawner.CondorSpawner',
+        dict(req_nprocs='1', req_memory='40960', req_runtime='4:00:00', req_culltime=15*60+300)),
+    ('Compute 2G (5 days)', 'condor5', 'batchspawner.CondorSpawner',
+        dict(req_nprocs='1', req_memory='2048', req_runtime='5 00:00:00')),
+    ('GPU Compute 2G (10h)', 'condorgpu1', 'batchspawner.CondorSpawner',
+        dict(req_nprocs='1', req_memory='2048', req_options='request_GPUs = 1', req_runtime='10:00:00')),
+    ('GPU Compute 5G (10h)', 'condorgpu2', 'batchspawner.CondorSpawner',
+        dict(req_nprocs='1', req_memory='5120', req_options='request_GPUs = 1', req_runtime='10:00:00')),
+    ('GPU Compute 20G (10h, timeout after 60 min idle)', 'condorgpu3', 'batchspawner.CondorSpawner',
+        dict(req_nprocs='1', req_memory='20480', req_options='request_GPUs = 1', req_runtime='10:00:00', req_culltime=60*60+300)),
+    ('GPU Compute 40G (4h, timeout after 15 min idle)', 'condorgpu4', 'batchspawner.CondorSpawner',
+        dict(req_nprocs='1', req_memory='40960', req_options='request_GPUs = 1', req_runtime='4:00:00', req_culltime=15*60+300)),
+    ('GPU Compute 2G (5 days)', 'condorgpu5', 'batchspawner.CondorSpawner',
+        dict(req_nprocs='1', req_memory='2048', req_options='request_GPUs = 1', req_runtime='5 00:00:00')),
+]
+
+c.Spawner.notebook_dir = '/home/{username}/'     # visible filesystem tree
+c.Spawner.http_timeout = 120
+c.Spawner.poll_interval = 300
+c.Spawner.startup_poll_interval = 2
+c.Spawner.start_timeout = 180  # timeout upon startup (condor queue time)
+c.JupyterHub.last_activity_interval = 60
+
+c.JupyterHub.services = [
+    {'name': "cull-idle-batch",
+     'admin': True,
+     'command': [sys.executable, os.path.join(BASEDIR, 'cull_idle_servers.py'),
+                 '--cull-every=300', '--timeout=600',
+                 '--server-db='+c.JupyterHub.db_url.split(':///')[1],
+                 '--url=http://%s:%s%s/hub/api'%(c.JupyterHub.hub_ip, c.JupyterHub.hub_port, c.JupyterHub.base_url if c.JupyterHub.base_url!='/' else '')
+                ],
+    }]
+
 
 #------------------------------------------------------------------------------
 # Application(SingletonConfigurable) configuration
