@@ -1,0 +1,11 @@
+## JupyterHub
+# the command(s) the Hub can run on behalf of the above users without needing a password
+Cmnd_Alias CONDOR_CMD = /bin/sh, /bin/bash, /opt/condor/bin/condor_submit, /opt/condor/bin/condor_q, /opt/condor/bin/condor_status, /opt/condor/bin/condor_rm
+
+# give the JupyterHub user permission to run the above command on behalf
+# of the users in group without prompting for a password
+%zarco-users ALL=(rhea) /usr/bin/sudo
+rhea ALL=(%zarco-users) NOPASSWD:SETENV:CONDOR_CMD
+
+# forward JupyterHub environment variables to jobs
+Defaults    env_keep += "JUPYTERHUB_API_TOKEN JPY_API_TOKEN JUPYTERHUB_CLIENT_ID JUPYTERHUB_HOST JUPYTERHUB_OAUTH_CALLBACK_URL JUPYTERHUB_USER JUPYTERHUB_API_URL JUPYTERHUB_BASE_URL JUPYTERHUB_SERVICE_PREFIX"
