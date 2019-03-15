@@ -61,7 +61,7 @@ Output = {homedir}/.jupyterhub.condor.out
 Error = {homedir}/.jupyterhub.condor.err
 ShouldTransferFiles = False
 GetEnv = True
-Rank = -TARGET.SlotID
+Rank = Memory
 {options}
 Queue
 '''
