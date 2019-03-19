@@ -61,7 +61,7 @@ Output = {homedir}/.jupyterhub.condor.out
 Error = {homedir}/.jupyterhub.condor.err
 ShouldTransferFiles = False
 GetEnv = True
-Rank = Memory
+Rank = TARGET.Memory - (100 * TARGET.TotalLoadAvg)
 {options}
 Queue
 '''
