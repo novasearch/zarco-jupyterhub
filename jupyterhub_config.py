@@ -3,7 +3,7 @@
 import os
 import sys
 
-import batchspawner.api
+import batchspawner
 
 
 BASEDIR = os.path.dirname(__file__)
@@ -55,7 +55,7 @@ Universe  =  vanilla
 Executable = /bin/sh
 RequestMemory = {memory}
 RequestCpus = {nprocs}
-Arguments = \"-c 'export PATH=/share/apps/anaconda3.6/bin:$PATH; exec {cmd}'\"
+Arguments = \"-c 'export PATH=/share/apps/anaconda3/2019.10/bin:$PATH; exec {cmd}'\"
 Remote_Initialdir = {homedir}
 Output = {homedir}/.jupyterhub.condor.out
 Error = {homedir}/.jupyterhub.condor.err
@@ -100,7 +100,7 @@ c.ProfilesSpawner.profiles = [
         dict(req_nprocs='1', req_memory='2048', req_options='request_GPUs = 1', req_runtime='5 00:00:00')),
 ]
 
-c.Spawner.notebook_dir = '/home/{username}/'     # visible filesystem tree
+c.Spawner.notebook_dir = '/home/{username}/.jupyterhub-tree/'     # visible filesystem tree
 c.Spawner.http_timeout = 120
 c.Spawner.poll_interval = 300
 c.Spawner.startup_poll_interval = 2
@@ -272,7 +272,7 @@ c.JupyterHub.services = [
 #c.JupyterHub.cookie_secret_file = 'jupyterhub_cookie_secret'
 
 ## The location of jupyterhub data files (e.g. /usr/local/share/jupyterhub)
-#c.JupyterHub.data_files_path = '/share/apps/anaconda3.6/share/jupyterhub'
+#c.JupyterHub.data_files_path = '/share/apps/anaconda3/2019.10/share/jupyterhub'
 
 ## Include any kwargs to pass to the database connection. See
 #  sqlalchemy.create_engine for details.
