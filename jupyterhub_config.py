@@ -41,6 +41,7 @@ c.JupyterHub.cookie_max_age_days = 3
 #
 # Spawner config
 #
+c.Spawner.default_url = '/lab'
 c.JupyterHub.spawner_class = 'wrapspawner.ProfilesSpawner'
 #------------------------------------------------------------------------------
 # BatchSpawnerBase configuration
